@@ -1,0 +1,384 @@
+--Services--
+local Players = game:GetService("Players")
+local ServerStorage = game:GetService("ServerStorage")
+local ServerScriptStorage = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local DataStore = game:GetService("DataStoreService")
+local TweenService = game:GetService("TweenService")
+local MarketPlaceService = game:GetService("MarketplaceService")
+local BadgeService = game:GetService("BadgeService")
+--Data Stores
+local LevelData = DataStore:GetDataStore("LevelData")
+local EXPData = DataStore:GetDataStore("EXPData")
+local CoinsData = DataStore:GetDataStore("CoinsData")
+local DiamonsData = DataStore:GetDataStore("DiamondsData")
+local WinsData = DataStore:GetDataStore("WinsData")
+local GamesPlayedData = DataStore:GetDataStore("GamesPlayedData")
+--Events
+local EndGameServer = ReplicatedStorage.EndGameServer
+local MoveParts = ReplicatedStorage.MoveParts
+local GameStarting = ReplicatedStorage.GameStarting
+local StartGameServer = ReplicatedStorage.StartGameServer
+local StartGame = ReplicatedStorage.StartGame
+local PlayerJoinEvent = ReplicatedStorage.PlayerJoin
+local CutSceneEvent = ReplicatedStorage.CutScene
+local TeleEvent = ReplicatedStorage.Teleport
+local EliminatedTextEvent = ReplicatedStorage.EliminatedText
+local GiveRewards = ReplicatedStorage.GiveRewards
+local ForcefieldEvent = ReplicatedStorage.Forcefield
+local AddToPowerupTable = ReplicatedStorage.AddToPowerupTable
+--
+local MaxSpots = ServerScriptStorage.MaxSpots
+local SpotsTaken = ServerScriptStorage.SpotsTaken
+local GameStarted = false
+local maps = ServerStorage.Maps
+local ServerRound = ServerScriptStorage.Round
+local roundtime = 0
+local PlayersInGame = {}
+local SpeedPowers = {}
+local JumpPowers = {}
+local InvinciblePowers = {}
+local Times2 = 100744638
+local FirstWinBadge = 2129308462
+local Win5Badge = 2129308463
+local Win10Badge = 2129308464
+local win50Badge = 2129308465
+local win100Badge = 2129308476
+
+
+-- This function fires when the first game starts, it picks a random map and adds it to the workspace as well as teleports all the players to the map.
+local function firstgame()
+	GameStarted = true
+	wait(1)
+	GameStarting:FireAllClients()
+	wait(10)
+	local MapFolder = maps["15+"]:GetChildren()
+	local StartMap = MapFolder[math.random(1, #MapFolder)]
+	local StartMap1 = StartMap:Clone()
+	StartMap:Destroy()
+	StartMap1.Parent = game.Workspace
+	local StartMapName = StartMap1.Name
+	StartMap1.Name = "Map"
+	StartMap1.Settings.MaxPlayers.Value = 10
+	roundtime = StartMap1.Settings.Time.Value
+	MaxSpots.Value = 10
+	SpotsTaken.Value = 0
+	wait(3)
+	local plrs = Players:GetPlayers()
+	local children = StartMap1:GetChildren()
+	local Spawns = {}
+	for i=1,#children do
+		if children[i].Name == "SpawnLocation" then
+			table.insert(Spawns, children[i])
+		end
+	end
+	for i = 1, #plrs do
+		local player = plrs[i]
+		local location = Spawns[i]
+		player.Character.HumanoidRootPart.CFrame = CFrame.new(location.Position + Vector3.new(0, 15, 0)) * CFrame.Angles(0, math.rad(-90), 0)
+		player.RespawnLocation = location
+	end
+	for _, Plr in ipairs(Players:GetPlayers()) do
+		for _, Tool in pairs(Plr.Backpack:GetChildren()) do
+			if Tool:IsA("Tool") then
+				Tool:Destroy()
+			end
+		end
+		Plr.Character:WaitForChild("Humanoid").MaxHealth = 100
+		Plr.Character:WaitForChild("Humanoid").Health = 100
+		local FF = Plr.Character:FindFirstChild("ForceField")
+		if FF ~= nil then
+			FF:Destroy()
+		end
+	end
+
+	for _, Plr in ipairs(SpeedPowers) do
+		game:GetService("InsertService"):LoadAsset(99119158):FindFirstChildWhichIsA("BackpackItem").Parent = Plr.Backpack
+	end
+	for _, Plr in ipairs(JumpPowers) do
+		game:GetService("InsertService"):LoadAsset(16688968):FindFirstChildWhichIsA("BackpackItem").Parent = Plr.Backpack
+	end
+	for _, Plr in ipairs(InvinciblePowers) do
+		local forceField = Instance.new("ForceField")
+		forceField.Visible = false
+		forceField.Parent = Plr.Character
+		Plr.Character:WaitForChild("Humanoid").MaxHealth = math.huge
+		Plr.Character:WaitForChild("Humanoid").Health = math.huge
+	end
+	SpeedPowers = {}
+	JumpPowers = {}
+	InvinciblePowers = {}
+
+	MoveParts:FireAllClients(StartMapName)
+	StartGameServer:Fire(roundtime, MaxSpots.Value, StartMapName, maps["15+"].Name, plrs)
+	StartGame:FireAllClients(roundtime, MaxSpots.Value)
+	CutSceneEvent:FireAllClients(StartMapName)
+	for _, Plr in next, plrs do
+		wait()
+		local OldGP
+		local NewGP
+		local success, errormessage = pcall(function()
+			OldGP = GamesPlayedData:GetAsync(Plr.UserId.."-GamesPlayed")
+		end)
+		if success then
+			NewGP = OldGP + 1
+			GamesPlayedData:SetAsync(Plr.UserId.."-GamesPlayed", NewGP)
+		end
+	end
+end
+
+
+-- When a player buys a power-up they get added to this group 
+AddToPowerupTable.Event:Connect(function(Plr, Powerup)
+	if Powerup == "Jump" then
+		table.insert(JumpPowers, Plr)
+	elseif Powerup == "Speed" then
+		table.insert(SpeedPowers, Plr)
+	elseif Powerup == "Invincible" then
+		table.insert(InvinciblePowers, Plr)
+	end
+end)
+
+
+--Checks if enough players have joined the game to start it
+PlayerJoinEvent.OnServerEvent:Connect(function(player, TeleportData)
+	ServerScriptStorage.Joined.Value = ServerScriptStorage.Joined.Value + 1
+	if ServerScriptStorage.Joined.Value == TeleportData[1] then
+		if GameStarted == false then
+			firstgame()
+		end
+	end
+end)
+
+wait(30)
+if GameStarted == false then
+	print("Force start")
+	firstgame()
+end
+
+
+-- Once a game ends this function fires, what it doesnt is pretty much start a new game based on how many players are left.
+EndGameServer.Event:Connect(function(FinishedPlayers)
+	wait(2)
+	local MapFolder
+	local MaxP
+	local function RunGame()
+		local StartMap = MapFolder[math.random(1, #MapFolder)]
+		local StartMap1 = StartMap:Clone()
+		local StartMapFolder = StartMap.Parent
+		StartMap:Destroy()
+		StartMap1.Parent = game.Workspace
+		local StartMapName = StartMap1.Name
+		StartMap1.Name = "Map"
+		StartMap1.Settings.MaxPlayers.Value = MaxP
+		roundtime = StartMap1.Settings.Time.Value
+		SpotsTaken.Value = 0
+		wait(3)
+		local plrs = Players:GetChildren()
+		local children = StartMap1:GetChildren()
+		local Spawns = {}
+		for i=1,#children do
+			if children[i].Name == "SpawnLocation" then
+				table.insert(Spawns, children[i])
+			end
+		end
+		for i = 1, #FinishedPlayers do
+			local player = FinishedPlayers[i]
+			local location = Spawns[i]
+			if player.Character ~= nil then
+				player.Character.HumanoidRootPart.CFrame = CFrame.new(location.Position + Vector3.new(0, 15, 0)) * CFrame.Angles(0, math.rad(-90), 0)
+				player.RespawnLocation = location
+			end
+		end
+
+		for _, Plr in ipairs(FinishedPlayers) do
+			if Plr.Character ~= nil then
+				Plr.Character.Humanoid.WalkSpeed = 16
+				Plr.Character.Humanoid.JumpHeight = 7.2
+				Plr.Character:WaitForChild("Humanoid").MaxHealth = 100
+				Plr.Character:WaitForChild("Humanoid").Health = 100
+				local FF = Plr.Character:FindFirstChild("ForceField")
+				if FF ~= nil then
+					FF:Destroy()
+				end
+			end
+			
+		end
+		for _, Plr in ipairs(SpeedPowers) do
+			if Plr.Backpack ~= nil then
+				game:GetService("InsertService"):LoadAsset(99119158):FindFirstChildWhichIsA("BackpackItem").Parent = Plr.Backpack
+			end
+		end
+		for _, Plr in ipairs(JumpPowers) do
+			if Plr.Backpack ~= nil then
+				game:GetService("InsertService"):LoadAsset(16688968):FindFirstChildWhichIsA("BackpackItem").Parent = Plr.Backpack
+			end
+		end
+		for _, Plr in ipairs(InvinciblePowers) do
+			if Plr.Character ~= nil then
+				local forceField = Instance.new("ForceField")
+				forceField.Parent = Plr.Character
+				forceField.Visible = false
+				Plr.Character:WaitForChild("Humanoid").MaxHealth = math.huge
+				Plr.Character:WaitForChild("Humanoid").Health = math.huge
+			end
+		end
+		SpeedPowers = {}
+		JumpPowers = {}
+		InvinciblePowers = {}
+		local SpawnLocations = game.Workspace.WaitingLobby.Spawns:GetChildren()
+		for _, Spwn in next, SpawnLocations do
+			Spwn.Enabled = true
+		end
+		for _, Plr in next, FinishedPlayers do
+			CutSceneEvent:FireClient(Plr, StartMapName)
+		end
+		MoveParts:FireAllClients(StartMapName)
+		StartGameServer:Fire(roundtime, MaxP, StartMapName, StartMapFolder, FinishedPlayers)
+		StartGame:FireAllClients(roundtime, MaxP)
+		
+	end
+	if #FinishedPlayers > 15 then
+		MapFolder = maps["15+"]:GetChildren()
+		if #FinishedPlayers > 25 then
+			MaxP = 25
+		elseif #FinishedPlayers > 20 and #FinishedPlayers < 26 then
+			MaxP = 20
+		elseif #FinishedPlayers > 15 and #FinishedPlayers < 21 then
+			MaxP = 15
+		end
+	elseif #FinishedPlayers > 10 and #FinishedPlayers < 16 then
+		MapFolder = maps["10-15"]:GetChildren()
+		MaxP = 10
+		RunGame()
+	elseif #FinishedPlayers > 5 and #FinishedPlayers < 11 then
+		MapFolder = maps["5-10"]:GetChildren()
+		MaxP = 5
+		RunGame()
+	elseif #FinishedPlayers > 0 and #FinishedPlayers < 6 and #FinishedPlayers ~= 1 then
+		MapFolder = maps["finals"]:GetChildren()
+		MaxP = 1
+		RunGame()
+	elseif #FinishedPlayers == 1 then
+		local Plrs = Players:GetPlayers()
+		local Plr = FinishedPlayers[1]
+		local MaxP = 1
+		local Folder = "Finals"
+		local teleportOptions = Instance.new("TeleportOptions")
+		local Rig = game.Workspace.WinnerRig
+		local Diamond = game.Workspace.Diamond
+		local goal = {}
+		local tweenInfo = TweenInfo.new(4, Enum.EasingStyle.Linear)
+		local Animation = Rig.Animation
+		local humanoid = Rig:FindFirstChild("Humanoid")
+		local Animate = humanoid:LoadAnimation(Animation)
+		goal.Position = Vector3.new(-27280.932, 32.887, 82416.039)
+		local tween = TweenService:Create(Diamond, tweenInfo, goal)
+		Rig.Name = ""
+		humanoid:ApplyDescription(Players:GetHumanoidDescriptionFromUserId(Plr.UserId))
+		CutSceneEvent:FireAllClients("Winner", Plr.Name)
+		Animate:Play()
+		wait(4)
+		tween:Play()
+		wait(5)
+		EliminatedTextEvent:FireClient(Plr, false, MaxP, Folder, true)
+	elseif #FinishedPlayers < 1 then	
+	end
+end)
+
+
+--Once a player is eliminated they can teleport back to the lobby place
+TeleEvent.OnServerEvent:Connect(function(LocalPlayer)
+	local teleportOptions = Instance.new("TeleportOptions")
+	teleportOptions.ShouldReserveServer = false
+	TeleportService:TeleportAsync(11454735662, {LocalPlayer}, teleportOptions)
+end)
+
+
+--gives a player rewards based on how far they made it
+GiveRewards.OnServerEvent:Connect(function(LocalPlayer, EarnedCoins, EarnedDiamonds, Wins, Folder)
+	
+	if Folder == "15+" then
+		EarnedCoins = 15
+		EarnedDiamonds = 0
+	elseif Folder == "10-15"then
+		EarnedCoins = 30
+		EarnedDiamonds = 0
+	elseif Folder == "5-10"then
+		EarnedCoins = 50
+		EarnedDiamonds = 0
+	elseif Folder == nil then
+		EarnedCoins = 100
+		EarnedDiamonds = 0
+	elseif Folder == "Finals" then
+		EarnedCoins = 200
+		EarnedDiamonds = 1
+		Wins = 1
+	end
+	if MarketPlaceService:UserOwnsGamePassAsync(LocalPlayer.UserId, Times2) then
+		EarnedCoins = EarnedCoins * 2
+	end
+	--Load Data
+	local OldCoinValue
+	local NewCoinValue
+
+	OldCoinValue = LocalPlayer.leaderstats.Coins.Value
+	NewCoinValue = OldCoinValue + EarnedCoins
+	local OldDiamondValue
+	local NewDiamondValue
+
+	OldDiamondValue = LocalPlayer.leaderstats.Diamonds.Value
+	NewDiamondValue = OldDiamondValue + EarnedDiamonds
+
+	if Wins ~= nil then
+		local OldWins
+		local NewWins
+
+		OldWins = LocalPlayer.leaderstats.Wins.Value
+		NewWins = OldWins + Wins
+		if NewWins >= 1 then
+			if not BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, FirstWinBadge) then
+				BadgeService:AwardBadge(LocalPlayer.UserId, FirstWinBadge)
+			end
+		end
+		if NewWins >= 5 then
+			if not BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, Win5Badge) then
+				BadgeService:AwardBadge(LocalPlayer.UserId, Win5Badge)
+			end
+		end
+		if NewWins >= 10 then
+			if not BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, Win10Badge) then
+				BadgeService:AwardBadge(LocalPlayer.UserId, Win10Badge)
+			end
+		end
+		if NewWins >= 50 then
+			if not BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, win50Badge) then
+				BadgeService:AwardBadge(LocalPlayer.UserId, win50Badge)
+			end
+		end
+		if NewWins >= 100 then
+			if not BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, win100Badge) then
+				BadgeService:AwardBadge(LocalPlayer.UserId, win100Badge)
+			end
+		end
+		LocalPlayer.leaderstats.Wins.Value = NewWins
+		WinsData:SetAsync(LocalPlayer.UserId.."-Wins", NewWins)
+	end
+	--Set Data
+	LocalPlayer.leaderstats.Coins.Value = NewCoinValue
+	CoinsData:SetAsync(LocalPlayer.UserId.."-Coins", NewCoinValue)
+	LocalPlayer.leaderstats.Diamonds.Value = NewDiamondValue
+	DiamonsData:SetAsync(LocalPlayer.UserId.."-Diamonds", NewDiamondValue)
+end)
+
+
+--GIves a player a forcefield if they bought the invincibility power up
+
+ForcefieldEvent.OnServerEvent:Connect(function(player)
+	local forceField = Instance.new("ForceField")
+	forceField.Parent = player.Character
+	forceField.Visible = false
+	player.Character:WaitForChild("Humanoid").MaxHealth = math.huge
+	player.Character:WaitForChild("Humanoid").Health = math.huge
+end)
