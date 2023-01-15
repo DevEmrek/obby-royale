@@ -68,17 +68,26 @@ local function firstgame()
 	local plrs = Players:GetPlayers()
 	local children = StartMap1:GetChildren()
 	local Spawns = {}
+	
+	--The first part of this function is just setting everything up for the rest of the function by making variables and picking a map
+	
 	for i=1,#children do
 		if children[i].Name == "SpawnLocation" then
 			table.insert(Spawns, children[i])
 		end
 	end
+	
+	--Next we are creating a table for all the spawn locations in the map by using table.insert we do this so it will be easier to assign a spawn location to a player
+	
 	for i = 1, #plrs do
 		local player = plrs[i]
 		local location = Spawns[i]
 		player.Character.HumanoidRootPart.CFrame = CFrame.new(location.Position + Vector3.new(0, 15, 0)) * CFrame.Angles(0, math.rad(-90), 0)
 		player.RespawnLocation = location
 	end
+	
+	-- We are teleporting the players to the spawn point they are assigned to. The only way to move a player correctly is by changing the position or CFrame of the humanoid root part
+	
 	for _, Plr in ipairs(Players:GetPlayers()) do
 		for _, Tool in pairs(Plr.Backpack:GetChildren()) do
 			if Tool:IsA("Tool") then
@@ -92,7 +101,8 @@ local function firstgame()
 			FF:Destroy()
 		end
 	end
-
+	--This is checking if a player has a tool in their inventory and deletes it because once the round starts it checks if the player has bought the power up to get the tool
+	--This also Changes each players health back to normals stats because if they have powerups those stats will be changed once the game begins
 	for _, Plr in ipairs(SpeedPowers) do
 		game:GetService("InsertService"):LoadAsset(99119158):FindFirstChildWhichIsA("BackpackItem").Parent = Plr.Backpack
 	end
@@ -109,11 +119,17 @@ local function firstgame()
 	SpeedPowers = {}
 	JumpPowers = {}
 	InvinciblePowers = {}
-
+	
+	--This gives the players their powerups, Once a player buys a powerup they are put into a group regarding their powerup so then the game checks if they are in that group and if they are they recieve the power up
+	-- Speed and jump gives a speed coil and gravity coil while invincibilty gives a player infinite health.
+	
 	MoveParts:FireAllClients(StartMapName)
 	StartGameServer:Fire(roundtime, MaxSpots.Value, StartMapName, maps["15+"].Name, plrs)
 	StartGame:FireAllClients(roundtime, MaxSpots.Value)
 	CutSceneEvent:FireAllClients(StartMapName)
+	
+	--This moves all of the moving parts to the workspace LOCALLY. This is done locally because if they are all in the server workspace it will cause too much lag.
+	
 	for _, Plr in next, plrs do
 		wait()
 		local OldGP
@@ -126,6 +142,9 @@ local function firstgame()
 			GamesPlayedData:SetAsync(Plr.UserId.."-GamesPlayed", NewGP)
 		end
 	end
+	
+	--Gives all of the players a game played on their stats and then saves it to a datastore
+	
 end
 
 
@@ -141,7 +160,7 @@ AddToPowerupTable.Event:Connect(function(Plr, Powerup)
 end)
 
 
---Checks if enough players have joined the game to start it
+--Checks if enough players have joined the game to start it then runs the function above
 PlayerJoinEvent.OnServerEvent:Connect(function(player, TeleportData)
 	ServerScriptStorage.Joined.Value = ServerScriptStorage.Joined.Value + 1
 	if ServerScriptStorage.Joined.Value == TeleportData[1] then
@@ -159,6 +178,7 @@ end
 
 
 -- Once a game ends this function fires, what it doesnt is pretty much start a new game based on how many players are left.
+--It is almost the same as the firstgame() function above so I won't repeat what some of the stuff inside of it does.
 EndGameServer.Event:Connect(function(FinishedPlayers)
 	wait(2)
 	local MapFolder
@@ -239,6 +259,9 @@ EndGameServer.Event:Connect(function(FinishedPlayers)
 		StartGame:FireAllClients(roundtime, MaxP)
 		
 	end
+	
+	--This is the map deciding part. It checks the number of players in the group "FinishedPlayers" and chooses a map from that. The maps are organized in different folders and it chooses a random map from the selected folder
+	
 	if #FinishedPlayers > 15 then
 		MapFolder = maps["15+"]:GetChildren()
 		if #FinishedPlayers > 25 then
@@ -316,6 +339,9 @@ GiveRewards.OnServerEvent:Connect(function(LocalPlayer, EarnedCoins, EarnedDiamo
 		EarnedDiamonds = 1
 		Wins = 1
 	end
+	
+	--It checks what was the folder of the last game and decides how far the player made it from there.
+	--This checks if a player has the Times 2 coins gamepass then gives them double the coins
 	if MarketPlaceService:UserOwnsGamePassAsync(LocalPlayer.UserId, Times2) then
 		EarnedCoins = EarnedCoins * 2
 	end
@@ -330,7 +356,10 @@ GiveRewards.OnServerEvent:Connect(function(LocalPlayer, EarnedCoins, EarnedDiamo
 
 	OldDiamondValue = LocalPlayer.leaderstats.Diamonds.Value
 	NewDiamondValue = OldDiamondValue + EarnedDiamonds
-
+	
+	--Assigns a a variable the value of the coins they recieve and adds it to their new coin balance
+	--Next we are updating their wins, First we see if they have any yet. We check this because if they have none then they don't have a datastore value for them.
+	--If they have none thats the first thing we do is make a datastore value for their wins
 	if Wins ~= nil then
 		local OldWins
 		local NewWins
@@ -364,12 +393,18 @@ GiveRewards.OnServerEvent:Connect(function(LocalPlayer, EarnedCoins, EarnedDiamo
 		end
 		LocalPlayer.leaderstats.Wins.Value = NewWins
 		WinsData:SetAsync(LocalPlayer.UserId.."-Wins", NewWins)
+		
+		--These are for badges, we are checkig how many wins they habe now and giving them a win based on that
+		
 	end
 	--Set Data
 	LocalPlayer.leaderstats.Coins.Value = NewCoinValue
 	CoinsData:SetAsync(LocalPlayer.UserId.."-Coins", NewCoinValue)
 	LocalPlayer.leaderstats.Diamonds.Value = NewDiamondValue
 	DiamonsData:SetAsync(LocalPlayer.UserId.."-Diamonds", NewDiamondValue)
+	
+	--Using :SetAsync to set the new datastore values for coins, diamonds, and wins 
+	
 end)
 
 
